@@ -1,0 +1,91 @@
+server {
+    set $cors_allowed_origin '*';
+    set $cors_max_age 600;
+    listen 80;
+    server_name api.shift.local
+    index index.php;
+    root /home/qolitum/shift-control/api/public;
+    charset utf-8;
+    client_max_body_size 100m;
+
+    # Разрешенные домены
+
+    set $cors_allowed_origin $http_origin;
+
+    location / {
+        if (!-e $request_filename) {
+            rewrite ^(.*)$  /index.php last;
+            break;
+        }
+    }
+
+    location ~* ^.+\.(jp?g|gif|png|ico|cur|swf|gz|css|js)$ {
+        if ($request_method = OPTIONS) {
+            add_header Access-Control-Allow-Methods 'GET, HEAD';
+            add_header Access-Control-Allow-Origin $cors_allowed_origin;
+            add_header Access-Control-Max-Age $cors_max_age;
+            add_header Content-Length '0';
+            add_header Content-Type 'text/plain; charset=UTF-8';
+            return 204;
+        }
+
+        add_header Access-Control-Allow-Origin $cors_allowed_origin always;
+
+        expires 30d;
+        access_log off;
+        add_header Cache-Control "public,must-revalidate";
+    }
+
+    location ~ \.php$ {
+        set $cors_request_headers '';
+        if ($request_method = OPTIONS) {
+            set $cors_request_headers $http_access_control_request_headers;
+        }
+        if ($cors_request_headers != '') {
+            add_header Access-Control-Allow-Headers $cors_request_headers;
+            add_header Access-Control-Allow-Methods 'DELETE, GET, HEAD, PATCH, POST, PUT';
+            add_header Access-Control-Allow-Origin $cors_allowed_origin;
+            add_header Access-Control-Max-Age $cors_max_age;
+            add_header Content-Length '0';
+            add_header Content-Type 'text/plain; charset=UTF-8';
+            return 204;
+        }
+        if ($request_method = OPTIONS) {
+            add_header Access-Control-Allow-Methods 'DELETE, GET, HEAD, PATCH, POST, PUT';
+            add_header Access-Control-Allow-Origin $cors_allowed_origin;
+            add_header Access-Control-Max-Age $cors_max_age;
+            add_header Content-Length '0';
+            add_header Content-Type 'text/plain; charset=UTF-8';
+            return 204;
+        }
+
+        add_header Access-Control-Allow-Origin $cors_allowed_origin always;
+
+        include fastcgi_params;
+        fastcgi_pass unix:/var/run/php/php8.2-fpm.sock;
+        fastcgi_param DOCUMENT_ROOT /home/qolitum/shift-control/api/public;
+        fastcgi_param SCRIPT_FILENAME $document_root/$fastcgi_script_name;
+    }
+}
+
+server {
+    listen          80;
+    server_name     shift.local;
+
+    gzip            on;
+    gzip_types      text/plain application/xml text/css application/javascript;
+    gzip_min_length 1000;
+
+    location / {
+        expires 30d;
+
+        proxy_redirect                      off;
+        proxy_set_header Host               $host;
+        proxy_set_header X-Real-IP          $remote_addr;
+        proxy_set_header X-Forwarded-For    $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto  $scheme;
+        proxy_read_timeout          1m;
+        proxy_connect_timeout       1m;
+        proxy_pass                          http://localhost:5173;
+    }
+}
